@@ -1,0 +1,68 @@
+USE [theDB]
+GO
+/****** Object:  StoredProcedure [dbo].[mySp]    Script Date: 7/20/2015 10:55:41 AM ******/
+SET ANSI_NULLS ON
+GO
+SET QUOTED_IDENTIFIER off
+GO
+
+/*
+--if the end date is today, it does not give today's data... must set it to tomorrow or specify time if you want todays data
+exec mySp'7-1-2015', '7-20-2015 23:59:59'
+*/
+
+ALTER proc [dbo].[mySp] @startdate DATETIME, @enddate DATETIME
+as 
+begin
+
+Declare @sql_command varchar(max)
+DECLARE @Description varchar(250)
+Set @Description = 'Accessed this Report' 
+
+SET @sql_command = "
+select tt2.colA, tt2.ColB, tt2.ColC, tt2.Name, tt2.LName, tt2.FName, tt2.TimeIn, tt2.TimeOut,
+
+ Convert(varchar(19), (tt2.[TimeOut] - tt2.Timein), 108) as 'TimeInSystem',  
+ 
+ tt2.Description, tt2.PageAccessedTime
+ from (
+	select ColA, ColB, ColC, Name, LName, FName, 
+
+	 tt.TimeIn, 
+	(Select max(DateTime)
+			from TableA ual
+			where tt.UserId=ual.UserId
+				  and Convert(date, cast(tt.TimeIn as datetime)) = Convert(date, Cast(ual.DateTime as datetime)))
+				   as 'TimeOut',
+
+	ual.Description, ual.DateTime as 'PageAccessedTime'
+
+	from
+	(
+		Select ul.UserId as 'UserId', ul.Description as 'Description', max(ul.DateTime) as 'TimeIn'
+		from 
+			TableA ul
+			where ul.Description like '%Logged In'
+			group by UserId, Description
+			) tt
+
+	join TableA ual on tt.thisId = ual.thisId
+	join TableB aspu on tt.thisId = aspu.thisId
+	join TableC ci on aspu.thisId = ci.thisId  
+	join TableD f   on ci.fid = f.f_id 
+	join TableE co on ci.thatId = co.that_id
+	join TableF s on perms.thisId = aspu.thisId
+	join TableG con on con.Name = aspu.Name
+	) tt2
+where tt2.PageAccessedTime between tt2.TimeIn and tt2.[TimeOut]
+and tt2.TimeIn between '@startdate' and '@enddate'
+order by LoweredUserName, TimeIn
+
+
+SET @sql_command = REPLACE(@sql_command,'@Description', @Description)
+SET @sql_command = REPLACE(@sql_command,'@startdate', @startdate)
+SET @sql_command = REPLACE(@sql_command,'@enddate', @enddate)
+PRINT @sql_command
+EXEC(@sql_command)
+
+end
